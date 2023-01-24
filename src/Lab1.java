@@ -73,56 +73,82 @@ class Train implements Runnable {
   }
 
   private void newSensorEventReceived(TSim.SensorEvent sensorE) throws InterruptedException, CommandException {
-    for (Path p : pathList) {
-      for (Point point : p.pos) {
-
-        if (!((point.getX() == sensorE.getXpos()) && (point.getY() == sensorE.getYpos()))) {
+    for (Path path : pathList) {
+      for (Point point : path.pos) {
+        if (!(point.getX() == sensorE.getXpos() && point.getY() == sensorE.getYpos())) {
           continue;
         }
-
-        Semaphore busy = p.busy;
-
-        if (p.index == currentPath) {
-          Point toRelease = p.pos[(TowardsStation2 ? 1 : 0)];
-          if (toRelease.getX() == sensorE.getXpos() && toRelease.getY() == sensorE.getYpos()) {
-            busy.release();
+        Semaphore currentSemaphore = path.busy;
+        currentPath = path.index;
+        int nextIndex = getNextDesiredPath();
+        Path nextPath = (Path) pathList.stream().filter(p -> (p.index == nextIndex)).toArray()[0];
+        Semaphore nextSemaphore = nextPath.busy;
+        if (nextIndex == 3 || nextIndex == 6) {
+          if ((TowardsStation2 && point == path.pos[1]) || (!TowardsStation2 && point == path.pos[0])) {
+            tsi.setSpeed(trainId, 0);
+            nextSemaphore.acquire();
+            tsi.setSpeed(trainId, trainSpeed);
           }
-          int nextPath = getNextDesiredPath();
-          final int lambdaNextPath = nextPath;
-          Path path = (Path) (pathList.stream().filter(c -> (c.index == lambdaNextPath))).toArray()[0];
-          Semaphore nextBusy = path.busy;
-          if (nextPath == 3 || nextPath == 6) { // Critical roads
-            if (!nextBusy.tryAcquire()) {
-              // tsi.setSpeed(trainId, 0);
-              nextBusy.acquire();
-              // tsi.setSpeed(trainId, trainSpeed);
-            }
-            // stanna och vänta eventuellt
-          } else { // Intersection
-            if (!nextBusy.tryAcquire(5, TimeUnit.MILLISECONDS)) {
-              nextPath++;
-            } else {
-            }
-
-            if (nextPath == 1 || nextPath == 2 || nextPath == 7 || nextPath == 8) { // Station
-            } else {
-
-            }
-            // sleepAtStation();
-            // Turn the train osv
+          else {
+            ((Path) pathList.stream().filter(p -> (p.index == currentPath - 1)).toArray()[0]).busy.release();
           }
-          setSwitch(nextPath);
-          break;
         }
-        // currentPath = p.index;
-        if (busy.tryAcquire(5, TimeUnit.MILLISECONDS)) {
-          System.out.println("Reached not owned");
-          currentPath = p.index;
-          int next = getNextDesiredPath();
-          setSwitch(next);
+        else {
 
-          break;
         }
+        /*
+         * if (!((point.getX() == sensorE.getXpos()) && (point.getY() ==
+         * sensorE.getYpos()))) {
+         * continue;
+         * }
+         *
+         * Semaphore busy = p.busy;
+         *
+         * if (p.index == currentPath) {
+         * Point toRelease = p.pos[(TowardsStation2 ? 1 : 0)];
+         * if (toRelease.getX() == sensorE.getXpos() && toRelease.getY() ==
+         * sensorE.getYpos()) {
+         * busy.release();
+         * }
+         * int nextPath = getNextDesiredPath();
+         * final int lambdaNextPath = nextPath;
+         * Path path = (Path) (pathList.stream().filter(c -> (c.index ==
+         * lambdaNextPath))).toArray()[0];
+         * Semaphore nextBusy = path.busy;
+         * if (nextPath == 3 || nextPath == 6) { // Critical roads
+         * if (!nextBusy.tryAcquire()) {
+         * // tsi.setSpeed(trainId, 0);
+         * nextBusy.acquire();
+         * // tsi.setSpeed(trainId, trainSpeed);
+         * }
+         * // stanna och vänta eventuellt
+         * } else { // Intersection
+         * if (!nextBusy.tryAcquire(5, TimeUnit.MILLISECONDS)) {
+         * nextPath++;
+         * } else {
+         * }
+         *
+         * if (nextPath == 1 || nextPath == 2 || nextPath == 7 || nextPath == 8) { //
+         * Station
+         * } else {
+         *
+         * }
+         * // sleepAtStation();
+         * // Turn the train osv
+         * }
+         * setSwitch(nextPath);
+         * break;
+         * }
+         * // currentPath = p.index;
+         * if (busy.tryAcquire(5, TimeUnit.MILLISECONDS)) {
+         * System.out.println("Reached not owned");
+         * currentPath = p.index;
+         * int next = getNextDesiredPath();
+         * setSwitch(next);
+         *
+         * break;
+         * }
+         */
         // wait
       }
     }
@@ -131,20 +157,49 @@ class Train implements Runnable {
   private void setSwitch(int nextPath) throws CommandException {
     System.out.println("Reached setSwitch\n\t NextPath: " + nextPath + "\n\tCurrent Path: " + currentPath);
     Path path = (Path) (pathList.stream().filter(c -> (c.index == currentPath))).toArray()[0];
-    Point sw = path.attachedSwitches[TowardsStation2 ? 0 : 1];
-    if (currentPath == 1 && nextPath == 3 ||
-        currentPath == 3 && nextPath == 1 ||
-        currentPath == 3 && nextPath == 4 ||
-        currentPath == 4 && nextPath == 3 ||
-        currentPath == 5 && nextPath == 6 ||
-        currentPath == 6 && nextPath == 5 ||
-        currentPath == 6 && nextPath == 8 ||
-        currentPath == 8 && nextPath == 6) {
-      tsi.setSwitch(sw.x, sw.y, tsi.SWITCH_RIGHT);
+    int switchDir = 0;
+    if (TowardsStation2) {
+      switch (currentPath) {
+        case 1:
+        case 4:
+          switchDir = tsi.SWITCH_RIGHT;
+          break;
+        case 2:
+        case 5:
+          switchDir = tsi.SWITCH_LEFT;
+          break;
+        case 3:
+        case 6:
+          switchDir = (nextPath == 5 || nextPath == 8) ? tsi.SWITCH_RIGHT : tsi.SWITCH_LEFT;
+          break;
+        case 7:
+        case 8:
+        default:
+          break;
+      }
+    } else {
+      switch (currentPath) {
+        case 3:
+        case 6:
+          switchDir = (nextPath == 2 || nextPath == 5) ? tsi.SWITCH_LEFT : tsi.SWITCH_RIGHT;
+          break;
+        case 4:
+        case 7:
+          switchDir = tsi.SWITCH_LEFT;
+          break;
+        case 5:
+        case 8:
+          switchDir = tsi.SWITCH_RIGHT;
+          break;
+        case 1:
+        case 2:
+        default:
+          break;
+      }
     }
-    else {
-      tsi.setSwitch(sw.x, sw.y, tsi.SWITCH_LEFT);
-    }
+    Point sw = path.attachedSwitches[TowardsStation2 ? 1 : 0];
+    tsi.setSwitch(sw.x, sw.y, switchDir);
+
   }
 
   private int getNextDesiredPath() {
