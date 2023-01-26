@@ -59,6 +59,7 @@ class Train implements Runnable {
       for (Path path : pathList){
         if(path.index == currentPath){
           path.busy.acquire();
+          System.out.println("startup aquasition");
         }
       }
       while (true) {
@@ -133,8 +134,10 @@ class Train implements Runnable {
             tsi.setSpeed(trainId, 0);
             if (!nextSemaphore.tryAcquire(5, TimeUnit.MILLISECONDS)) {
               for (Path p : pathList){
-                if (p.index == nextIndex + (TowardsStation2 ? 1 : -1)){
+                if (p.index == nextIndex + 1){
                   nextIndex = p.index;
+                  p.busy.acquire();
+                  System.out.println("Train " + trainId + " aquired semaphore: " + nextIndex + " and a took detour");
                   break;
                 }
               }
@@ -179,7 +182,7 @@ class Train implements Runnable {
           break;
         case 3:
         case 6:
-          switchDir = (nextPath == 4 || nextPath == 7) ? tsi.SWITCH_RIGHT : tsi.SWITCH_LEFT;
+          switchDir = (nextPath == 4 || nextPath == 8) ? tsi.SWITCH_RIGHT : tsi.SWITCH_LEFT;
           break;
         case 7:
         case 8:
