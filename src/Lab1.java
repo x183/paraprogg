@@ -9,6 +9,7 @@ import javax.swing.text.AbstractDocument.BranchElement;
 
 public class Lab1 {
   List<Path> pathList;
+  Crossing crossing;
 
   public Lab1(int speed1, int speed2) {
     TSimInterface tsi = TSimInterface.getInstance();
@@ -27,8 +28,10 @@ public class Lab1 {
     pathList.add(new Path(5, 11, 15, 11, 7, new Point[] { null, switch4 }));
     pathList.add(new Path(4, 13, 15, 13, 8, new Point[] { null, switch4 }));
 
-    Train train1 = new Train(1, speed1, tsi, pathList);
-    Train train2 = new Train(2, speed2, tsi, pathList);
+    crossing = new Crossing(6, 7, 10, 7, 8, 5, 9, 8);
+
+    Train train1 = new Train(1, speed1, tsi, pathList, crossing);
+    Train train2 = new Train(2, speed2, tsi, pathList, crossing);
 
     Thread thread1 = new Thread(train1);
     Thread thread2 = new Thread(train2);
@@ -49,6 +52,7 @@ class Train implements Runnable {
   int lastPath = 0;
   boolean TowardsStation2;
   List<Path> pathList;
+  Crossing crossing;
   TSimInterface tsi;
   // Semaphore paths = new Semaphore(1);
 
@@ -88,6 +92,25 @@ class Train implements Runnable {
     if(sensorE.getStatus() == sensorE.INACTIVE){
       return;
     }
+
+    // Entering the crossing
+    if((TowardsStation2 && crossing.pos1[0].getX() == sensorE.getXpos() && crossing.pos1[0].getY() == sensorE.getYpos()) || 
+    (TowardsStation2 && crossing.pos2[0].getX() == sensorE.getXpos() && crossing.pos2[0].getY() == sensorE.getYpos()) ||
+    (!TowardsStation2 && crossing.pos1[1].getX() == sensorE.getXpos() && crossing.pos1[1].getY() == sensorE.getYpos()) ||
+    (!TowardsStation2 && crossing.pos2[1].getX() == sensorE.getXpos() && crossing.pos2[1].getY() == sensorE.getYpos())) {
+      System.out.println("Train " + trainId + " Reached crossing");
+      tsi.setSpeed(trainId, 0);
+      crossing.busy.acquire();
+      tsi.setSpeed(trainId, trainSpeed);
+    }
+    
+    // Leaving crossing
+    else if ((TowardsStation2 && crossing.pos1[1].getX() == sensorE.getXpos() && crossing.pos1[1].getY() == sensorE.getYpos()) || 
+    (TowardsStation2 && crossing.pos2[1].getX() == sensorE.getXpos() && crossing.pos2[1].getY() == sensorE.getYpos()) ||
+    (!TowardsStation2 && crossing.pos1[0].getX() == sensorE.getXpos() && crossing.pos1[0].getY() == sensorE.getYpos()) ||
+    (!TowardsStation2 && crossing.pos2[0].getX() == sensorE.getXpos() && crossing.pos2[0].getY() == sensorE.getYpos())){
+      crossing.busy.release();
+    }
     
     for (Path path : pathList) {
       for (Point point : path.pos) {
@@ -96,7 +119,7 @@ class Train implements Runnable {
         if (!(point.getX() == sensorE.getXpos() && point.getY() == sensorE.getYpos())) {
           continue;
         }
-
+        
         //Setup
         lastPath = currentPath;
         currentPath = path.index;
@@ -278,13 +301,26 @@ class Train implements Runnable {
   }
 
 
-  public Train(int trainId, int trainSpeed, TSimInterface tsi, List<Path> pathList) {
+  public Train(int trainId, int trainSpeed, TSimInterface tsi, List<Path> pathList, Crossing crossing) {
     this.trainId = trainId;
     this.trainSpeed = trainSpeed;
     this.tsi = tsi;
     this.pathList = pathList;
+    this.crossing = crossing;
     TowardsStation2 = (trainId == 1);
     currentPath = (TowardsStation2 ? 1 : 7);
+  }
+}
+
+class Crossing {
+  public Point[] pos1;
+  public Point[] pos2;
+  public Semaphore busy;
+
+  public Crossing(int x11, int y11, int x12, int y12, int x21, int y21, int x22, int y22){
+    pos1 = new Point[] {new Point(x11, y11), new Point(x12, y12)};
+    pos2 = new Point[] {new Point(x21, y21), new Point(x22, y22)};  
+    busy = new Semaphore(1);
   }
 }
 
