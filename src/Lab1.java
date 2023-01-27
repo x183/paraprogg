@@ -4,8 +4,6 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import javax.sound.sampled.SourceDataLine;
-import javax.swing.text.AbstractDocument.BranchElement;
 
 public class Lab1 {
   List<Path> pathList;
@@ -94,7 +92,8 @@ class Train implements Runnable {
     }
 
     // Entering the crossing
-    if((TowardsStation2 && crossing.pos1[0].getX() == sensorE.getXpos() && crossing.pos1[0].getY() == sensorE.getYpos()) || 
+    if ((TowardsStation2 && crossing.pos1[0].getX() == sensorE.getXpos()
+        && crossing.pos1[0].getY() == sensorE.getYpos()) ||
     (TowardsStation2 && crossing.pos2[0].getX() == sensorE.getXpos() && crossing.pos2[0].getY() == sensorE.getYpos()) ||
     (!TowardsStation2 && crossing.pos1[1].getX() == sensorE.getXpos() && crossing.pos1[1].getY() == sensorE.getYpos()) ||
     (!TowardsStation2 && crossing.pos2[1].getX() == sensorE.getXpos() && crossing.pos2[1].getY() == sensorE.getYpos())) {
@@ -103,35 +102,31 @@ class Train implements Runnable {
       crossing.busy.acquire();
       tsi.setSpeed(trainId, trainSpeed);
     }
-    
+
     // Leaving crossing
-    else if ((TowardsStation2 && crossing.pos1[1].getX() == sensorE.getXpos() && crossing.pos1[1].getY() == sensorE.getYpos()) || 
+    else if ((TowardsStation2 && crossing.pos1[1].getX() == sensorE.getXpos()
+        && crossing.pos1[1].getY() == sensorE.getYpos()) ||
     (TowardsStation2 && crossing.pos2[1].getX() == sensorE.getXpos() && crossing.pos2[1].getY() == sensorE.getYpos()) ||
     (!TowardsStation2 && crossing.pos1[0].getX() == sensorE.getXpos() && crossing.pos1[0].getY() == sensorE.getYpos()) ||
-    (!TowardsStation2 && crossing.pos2[0].getX() == sensorE.getXpos() && crossing.pos2[0].getY() == sensorE.getYpos())){
+        (!TowardsStation2 && crossing.pos2[0].getX() == sensorE.getXpos()
+            && crossing.pos2[0].getY() == sensorE.getYpos())) {
       crossing.busy.release();
     }
-    
+
     for (Path path : pathList) {
       for (Point point : path.pos) {
-        
+
         // Checks if correct path
         if (!(point.getX() == sensorE.getXpos() && point.getY() == sensorE.getYpos())) {
           continue;
         }
-        
+
         //Setup
         lastPath = currentPath;
         currentPath = path.index;
         int nextIndex = getNextDesiredPath();
         final int tempIndexLast = lastPath;
-        Path nextPath = null;
-        for (Path poinp : pathList) {
-          if (poinp.index == nextIndex) {
-            nextPath = poinp;
-            break;
-          }
-        }
+        Path nextPath = pathList.get(nextIndex - 1);
         Semaphore nextSemaphore = nextPath.busy;
 
         // Exit trigger
@@ -156,14 +151,9 @@ class Train implements Runnable {
           else{
             tsi.setSpeed(trainId, 0);
             if (!nextSemaphore.tryAcquire(5, TimeUnit.MILLISECONDS)) {
-              for (Path p : pathList){
-                if (p.index == nextIndex + 1){
-                  nextIndex = p.index;
-                  p.busy.acquire();
-                  System.out.println("Train " + trainId + " aquired semaphore: " + nextIndex + " and a took detour");
-                  break;
-                }
-              }
+              pathList.get(nextIndex).busy.acquire();
+              nextIndex++;
+              System.out.println("Train " + trainId + " aquired semaphore: " + nextIndex + " and a took detour");
             }
             else{
               System.out.println("Train " + trainId + " aquired semaphore: " + nextIndex);
@@ -181,7 +171,7 @@ class Train implements Runnable {
 
           ((Path) pathList.stream().filter(p -> (p.index == tempIndexLast)).toArray()[0]).busy.release();
 
-          System.out.println("Succes! " + lastPath);
+          System.out.println("Success! " + lastPath);
 
         }
       }
@@ -191,14 +181,10 @@ class Train implements Runnable {
 
   private void setSwitch(int nextPath) throws CommandException {
     System.out.println("Reached setSwitch\n\t NextPath: " + nextPath + "\n\tCurrent Path: " + currentPath);
-    Path path = (Path) (pathList.stream().filter(c -> (c.index == currentPath))).toArray()[0];
-    int switchDir = 0;
+    Path path = pathList.get(currentPath - 1);
+    int switchDir = tsi.SWITCH_RIGHT;
     if (TowardsStation2) {
       switch (currentPath) {
-        case 1:
-        case 5:
-          switchDir = tsi.SWITCH_RIGHT;
-          break;
         case 2:
         case 4:
           switchDir = tsi.SWITCH_LEFT;
@@ -207,8 +193,6 @@ class Train implements Runnable {
         case 6:
           switchDir = (nextPath == 4 || nextPath == 8) ? tsi.SWITCH_RIGHT : tsi.SWITCH_LEFT;
           break;
-        case 7:
-        case 8:
         default:
           break;
       }
@@ -222,12 +206,6 @@ class Train implements Runnable {
         case 7:
           switchDir = tsi.SWITCH_LEFT;
           break;
-        case 4:
-        case 8:
-          switchDir = tsi.SWITCH_RIGHT;
-          break;
-        case 1:
-        case 2:
         default:
           break;
       }
@@ -239,51 +217,37 @@ class Train implements Runnable {
   }
 
   private int getNextDesiredPath() {
-    int nextPath = 0;
+    int nextPath = currentPath;
     if (TowardsStation2) {
       switch (currentPath) {
         case 1:
-        case 2:
-          nextPath = 3;
-          break;
-        case 3:
-          nextPath = 4;
-          break;
         case 4:
+          nextPath = currentPath + 2;
+          break;
+        case 2:
+        case 3:
         case 5:
-          nextPath = 6;
-          break;
         case 6:
-        case 7:
-          nextPath = 7;
+          nextPath = currentPath + 1;
           break;
-        case 8:
         default:
-          nextPath = 8;
           break;
       }
     }
 
     else {
       switch (currentPath) {
-        case 1:
         case 3:
-          nextPath = 1;
-          break;
-        case 2:
-          nextPath = 2;
+        case 5:
+        case 6:
+        case 8:
+          nextPath = currentPath - 2;
           break;
         case 4:
-        case 5:
-          nextPath = 3;
-          break;
-        case 6:
-          nextPath = 4;
-          break;
         case 7:
-        case 8:
+          nextPath = currentPath - 1;
+          break;
         default:
-          nextPath = 6;
           break;
       }
     }
@@ -319,7 +283,7 @@ class Crossing {
 
   public Crossing(int x11, int y11, int x12, int y12, int x21, int y21, int x22, int y22){
     pos1 = new Point[] {new Point(x11, y11), new Point(x12, y12)};
-    pos2 = new Point[] {new Point(x21, y21), new Point(x22, y22)};  
+    pos2 = new Point[] { new Point(x21, y21), new Point(x22, y22) };
     busy = new Semaphore(1);
   }
 }
