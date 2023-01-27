@@ -183,33 +183,24 @@ class Train implements Runnable {
     System.out.println("Reached setSwitch\n\t NextPath: " + nextPath + "\n\tCurrent Path: " + currentPath);
     Path path = pathList.get(currentPath - 1);
     int switchDir = tsi.SWITCH_RIGHT;
-    if (TowardsStation2) {
-      switch (currentPath) {
-        case 2:
-        case 4:
-          switchDir = tsi.SWITCH_LEFT;
-          break;
-        case 3:
-        case 6:
-          switchDir = (nextPath == 4 || nextPath == 8) ? tsi.SWITCH_RIGHT : tsi.SWITCH_LEFT;
-          break;
-        default:
-          break;
-      }
-    } else {
-      switch (currentPath) {
-        case 3:
-        case 6:
-          switchDir = (nextPath == 2 || nextPath == 4) ? tsi.SWITCH_LEFT : tsi.SWITCH_RIGHT;
-          break;
-        case 5:
-        case 7:
-          switchDir = tsi.SWITCH_LEFT;
-          break;
-        default:
-          break;
-      }
+    switch (currentPath) {
+      case 2:
+      case 4:
+        switchDir = (TowardsStation2 ? tsi.SWITCH_LEFT : switchDir);
+        break;
+      case 5:
+      case 7:
+        switchDir = (!TowardsStation2 ? tsi.SWITCH_LEFT : switchDir);
+        break;
+      case 3:
+      case 6:
+        switchDir = (nextPath == 2 || nextPath == 7
+            || (!TowardsStation2 && nextPath == 4 || (TowardsStation2 && nextPath == 5)) ? tsi.SWITCH_LEFT
+                : switchDir);
+      default:
+        break;
     }
+
     Point sw = path.attachedSwitches[TowardsStation2 ? 0 : 1];
     tsi.setSwitch(sw.x, sw.y, switchDir);
     System.out.println("Swapped switch " + sw.x + " " + sw.y);
