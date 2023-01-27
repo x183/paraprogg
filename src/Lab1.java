@@ -21,12 +21,12 @@ public class Lab1 {
     pathList.add(new Path(15, 5, 15, 8, 2, new Point[] { switch1, null }));
     pathList.add(new Path(19, 7, 17, 9, 3, new Point[] { switch2, switch1 }));
     pathList.add(new Path(13, 9, 6, 9, 4, new Point[] { switch3, switch2 }));
-    pathList.add(new Path(13, 10, 5, 10, 5, new Point[] { switch3, switch2 }));
+    pathList.add(new Path(13, 10, 6, 10, 5, new Point[] { switch3, switch2 }));
     pathList.add(new Path(2, 9, 1, 11, 6, new Point[] { switch4, switch3 }));
     pathList.add(new Path(5, 11, 15, 11, 7, new Point[] { null, switch4 }));
     pathList.add(new Path(4, 13, 15, 13, 8, new Point[] { null, switch4 }));
 
-    crossing = new Crossing(6, 7, 10, 7, 8, 5, 9, 8);
+    crossing = new Crossing(6, 6, 11, 7, 8, 5, 10, 8);
 
     Train train1 = new Train(1, speed1, tsi, pathList, crossing);
     Train train2 = new Train(2, speed2, tsi, pathList, crossing);
