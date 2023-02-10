@@ -28,24 +28,22 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
 
 % Join channel
 handle(St, {join, Channel}) ->
-    % TODO: Implement this function
-    % {reply, ok, St} ;
-    St#client_st.server ! {join, Channel, St#client_st.nick}.
+    St#client_st.server ! {join, Channel, self(), St#client_st.nick},
+    {reply, ok, St};
     %{reply, {error, not_implemented, "join not implemented"}, St} ;
 
 % Leave channel
 handle(St, {leave, Channel}) ->
-    % TODO: Implement this function
     % {reply, ok, St} ;
-    {reply, ok, St} ;
-    St#client_st.server ! {leave, Channel, St#client_st.nick}.
+    St#client_st.server ! {leave, Channel, St#client_st.nick},
+    {reply, ok, St};
+
     %{reply, {error, not_implemented, "leave not implemented"}, St} ;
 
 % Sending message (from GUI, to channel)
 handle(St, {message_send, Channel, Msg}) ->
-    St#client_st ! {message_send, Channel, St#client_st.nick, Msg}.
-    % TODO: Implement this function
-    % {reply, ok, St} ;
+    St#client_st.server ! {message_send, Channel, St#client_st.gui, St#client_st.nick, Msg},
+    {reply, ok, St} ;
     %{reply, {error, not_implemented, "message sending not implemented"}, St} ;
 
 % This case is only relevant for the distinction assignment!
