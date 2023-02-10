@@ -30,19 +30,23 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
 handle(St, {join, Channel}) ->
     % TODO: Implement this function
     % {reply, ok, St} ;
-    {reply, {error, not_implemented, "join not implemented"}, St} ;
+    St#client_st.server ! {join, Channel, St#client_st.nick}.
+    %{reply, {error, not_implemented, "join not implemented"}, St} ;
 
 % Leave channel
 handle(St, {leave, Channel}) ->
     % TODO: Implement this function
     % {reply, ok, St} ;
-    {reply, {error, not_implemented, "leave not implemented"}, St} ;
+    {reply, ok, St} ;
+    St#client_st.server ! {leave, Channel, St#client_st.nick}.
+    %{reply, {error, not_implemented, "leave not implemented"}, St} ;
 
 % Sending message (from GUI, to channel)
 handle(St, {message_send, Channel, Msg}) ->
+    St#client_st ! {message_send, Channel, St#client_st.nick, Msg}.
     % TODO: Implement this function
     % {reply, ok, St} ;
-    {reply, {error, not_implemented, "message sending not implemented"}, St} ;
+    %{reply, {error, not_implemented, "message sending not implemented"}, St} ;
 
 % This case is only relevant for the distinction assignment!
 % Change nick (no check, local only)

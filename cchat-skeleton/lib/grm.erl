@@ -7,11 +7,11 @@
 
 ff({_,_,Content}) -> Content.
 
--file("/usr/lib/erlang/lib/parsetools-2.1.6/include/yeccpre.hrl", 0).
+-file("/chalmers/sw/sup64/erlang-24.0/lib/erlang/lib/parsetools-2.3/include/yeccpre.hrl", 0).
 %%
 %% %CopyrightBegin%
 %%
-%% Copyright Ericsson AB 1996-2017. All Rights Reserved.
+%% Copyright Ericsson AB 1996-2018. All Rights Reserved.
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -35,15 +35,15 @@ ff({_,_,Content}) -> Content.
 
 -spec parse(Tokens :: list()) -> yecc_ret().
 parse(Tokens) ->
-    yeccpars0(Tokens, {no_func, no_line}, 0, [], []).
+    yeccpars0(Tokens, {no_func, no_location}, 0, [], []).
 
 -spec parse_and_scan({function() | {atom(), atom()}, [_]}
                      | {atom(), atom(), [_]}) -> yecc_ret().
 parse_and_scan({F, A}) ->
-    yeccpars0([], {{F, A}, no_line}, 0, [], []);
+    yeccpars0([], {{F, A}, no_location}, 0, [], []);
 parse_and_scan({M, F, A}) ->
     Arity = length(A),
-    yeccpars0([], {{fun M:F/Arity, A}, no_line}, 0, [], []).
+    yeccpars0([], {{fun M:F/Arity, A}, no_location}, 0, [], []).
 
 -spec format_error(any()) -> [char() | list()].
 format_error(Message) ->
@@ -57,17 +57,16 @@ format_error(Message) ->
 %% To be used in grammar files to throw an error message to the parser
 %% toplevel. Doesn't have to be exported!
 -compile({nowarn_unused_function, return_error/2}).
--spec return_error(integer(), any()) -> no_return().
-return_error(Line, Message) ->
-    throw({error, {Line, ?MODULE, Message}}).
+-spec return_error(erl_anno:location(), any()) -> no_return().
+return_error(Location, Message) ->
+    throw({error, {Location, ?MODULE, Message}}).
 
 -define(CODE_VERSION, "1.4").
 
 yeccpars0(Tokens, Tzr, State, States, Vstack) ->
     try yeccpars1(Tokens, Tzr, State, States, Vstack)
     catch 
-        error: Error ->
-            Stacktrace = erlang:get_stacktrace(),
+        error: Error: Stacktrace ->
             try yecc_error_type(Error, Stacktrace) of
                 Desc ->
                     erlang:raise(error, {yecc_bug, ?CODE_VERSION, Desc},
@@ -75,7 +74,7 @@ yeccpars0(Tokens, Tzr, State, States, Vstack) ->
             catch _:_ -> erlang:raise(error, Error, Stacktrace)
             end;
         %% Probably thrown from return_error/2:
-        throw: {error, {_Line, ?MODULE, _M}} = Error ->
+        throw: {error, {_Location, ?MODULE, _M}} = Error ->
             Error
     end.
 
@@ -92,22 +91,22 @@ yecc_error_type(function_clause, [{?MODULE,F,ArityOrArgs,_} | _]) ->
 
 yeccpars1([Token | Tokens], Tzr, State, States, Vstack) ->
     yeccpars2(State, element(1, Token), States, Vstack, Token, Tokens, Tzr);
-yeccpars1([], {{F, A},_Line}, State, States, Vstack) ->
+yeccpars1([], {{F, A},_Location}, State, States, Vstack) ->
     case apply(F, A) of
-        {ok, Tokens, Endline} ->
-            yeccpars1(Tokens, {{F, A}, Endline}, State, States, Vstack);
-        {eof, Endline} ->
-            yeccpars1([], {no_func, Endline}, State, States, Vstack);
-        {error, Descriptor, _Endline} ->
+        {ok, Tokens, EndLocation} ->
+            yeccpars1(Tokens, {{F, A}, EndLocation}, State, States, Vstack);
+        {eof, EndLocation} ->
+            yeccpars1([], {no_func, EndLocation}, State, States, Vstack);
+        {error, Descriptor, _EndLocation} ->
             {error, Descriptor}
     end;
-yeccpars1([], {no_func, no_line}, State, States, Vstack) ->
+yeccpars1([], {no_func, no_location}, State, States, Vstack) ->
     Line = 999999,
     yeccpars2(State, '$end', States, Vstack, yecc_end(Line), [],
               {no_func, Line});
-yeccpars1([], {no_func, Endline}, State, States, Vstack) ->
-    yeccpars2(State, '$end', States, Vstack, yecc_end(Endline), [],
-              {no_func, Endline}).
+yeccpars1([], {no_func, EndLocation}, State, States, Vstack) ->
+    yeccpars2(State, '$end', States, Vstack, yecc_end(EndLocation), [],
+              {no_func, EndLocation}).
 
 %% yeccpars1/7 is called from generated code.
 %%
@@ -118,21 +117,19 @@ yeccpars1([], {no_func, Endline}, State, States, Vstack) ->
 yeccpars1(State1, State, States, Vstack, Token0, [Token | Tokens], Tzr) ->
     yeccpars2(State, element(1, Token), [State1 | States],
               [Token0 | Vstack], Token, Tokens, Tzr);
-yeccpars1(State1, State, States, Vstack, Token0, [], {{_F,_A}, _Line}=Tzr) ->
+yeccpars1(State1, State, States, Vstack, Token0, [], {{_F,_A}, _Location}=Tzr) ->
     yeccpars1([], Tzr, State, [State1 | States], [Token0 | Vstack]);
-yeccpars1(State1, State, States, Vstack, Token0, [], {no_func, no_line}) ->
-    Line = yecctoken_end_location(Token0),
+yeccpars1(State1, State, States, Vstack, Token0, [], {no_func, no_location}) ->
+    Location = yecctoken_end_location(Token0),
     yeccpars2(State, '$end', [State1 | States], [Token0 | Vstack],
-              yecc_end(Line), [], {no_func, Line});
-yeccpars1(State1, State, States, Vstack, Token0, [], {no_func, Line}) ->
+              yecc_end(Location), [], {no_func, Location});
+yeccpars1(State1, State, States, Vstack, Token0, [], {no_func, Location}) ->
     yeccpars2(State, '$end', [State1 | States], [Token0 | Vstack],
-              yecc_end(Line), [], {no_func, Line}).
+              yecc_end(Location), [], {no_func, Location}).
 
 %% For internal use only.
-yecc_end({Line,_Column}) ->
-    {'$end', Line};
-yecc_end(Line) ->
-    {'$end', Line}.
+yecc_end(Location) ->
+    {'$end', Location}.
 
 yecctoken_end_location(Token) ->
     try erl_anno:end_location(element(2, Token)) of
@@ -180,7 +177,7 @@ yecctoken2string(Other) ->
 
 
 
--file("grm.erl", 183).
+-file("grm.erl", 180).
 
 -dialyzer({nowarn_function, yeccpars2/7}).
 yeccpars2(0=S, Cat, Ss, Stack, T, Ts, Tzr) ->
@@ -454,114 +451,114 @@ yeccgoto_unit(30=_S, Cat, Ss, Stack, T, Ts, Tzr) ->
 -compile({inline,yeccpars2_3_/1}).
 -file("grm.yrl", 13).
 yeccpars2_3_(__Stack0) ->
- [__1 | __Stack] = __Stack0,
+ [___1 | __Stack] = __Stack0,
  [begin
-   disconnect
+                        disconnect
   end | __Stack].
 
 -compile({inline,yeccpars2_5_/1}).
 -file("grm.yrl", 11).
 yeccpars2_5_(__Stack0) ->
- [__1 | __Stack] = __Stack0,
+ [___1 | __Stack] = __Stack0,
  [begin
-   leave
+                   leave
   end | __Stack].
 
 -compile({inline,yeccpars2_8_/1}).
 -file("grm.yrl", 26).
 yeccpars2_8_(__Stack0) ->
- [__1 | __Stack] = __Stack0,
+ [___1 | __Stack] = __Stack0,
  [begin
-   quit
+                  quit
   end | __Stack].
 
 -compile({inline,yeccpars2_9_/1}).
 -file("grm.yrl", 28).
 yeccpars2_9_(__Stack0) ->
- [__1 | __Stack] = __Stack0,
+ [___1 | __Stack] = __Stack0,
  [begin
-   whoami
+                    whoami
   end | __Stack].
 
 -compile({inline,yeccpars2_10_/1}).
 -file("grm.yrl", 32).
 yeccpars2_10_(__Stack0) ->
- [__2,__1 | __Stack] = __Stack0,
+ [___2,___1 | __Stack] = __Stack0,
  [begin
-   { ping , ff ( __2 ) }
+                              {ping, ff(___2)}
   end | __Stack].
 
 -compile({inline,yeccpars2_11_/1}).
 -file("grm.yrl", 30).
 yeccpars2_11_(__Stack0) ->
- [__2,__1 | __Stack] = __Stack0,
+ [___2,___1 | __Stack] = __Stack0,
  [begin
-   { nick , ff ( __2 ) }
+                              {nick, ff(___2)}
   end | __Stack].
 
 -compile({inline,yeccpars2_12_/1}).
 -file("grm.yrl", 24).
 yeccpars2_12_(__Stack0) ->
- [__2,__1 | __Stack] = __Stack0,
+ [___2,___1 | __Stack] = __Stack0,
  [begin
-   { leave , ff ( __2 ) }
+                             {leave, ff(___2)}
   end | __Stack].
 
 -compile({inline,yeccpars2_13_/1}).
 -file("grm.yrl", 22).
 yeccpars2_13_(__Stack0) ->
- [__2,__1 | __Stack] = __Stack0,
+ [___2,___1 | __Stack] = __Stack0,
  [begin
-   { join , ff ( __2 ) }
+                            {join, ff(___2)}
   end | __Stack].
 
 -compile({inline,yeccpars2_14_/1}).
 -file("grm.yrl", 15).
 yeccpars2_14_(__Stack0) ->
- [__2,__1 | __Stack] = __Stack0,
+ [___2,___1 | __Stack] = __Stack0,
  [begin
-   { connect , ff ( __2 ) }
+                                 {connect, ff(___2)}
   end | __Stack].
 
 -compile({inline,yeccpars2_22_/1}).
 -file("grm.yrl", 36).
 yeccpars2_22_(__Stack0) ->
- [__1 | __Stack] = __Stack0,
+ [___1 | __Stack] = __Stack0,
  [begin
-   ff ( __1 )
+                ff(___1)
   end | __Stack].
 
 -compile({inline,yeccpars2_23_/1}).
 -file("grm.yrl", 37).
 yeccpars2_23_(__Stack0) ->
- [__2,__1 | __Stack] = __Stack0,
+ [___2,___1 | __Stack] = __Stack0,
  [begin
-   ff ( __1 ) ++ ff ( __2 )
+                      ff(___1)++ff(___2)
   end | __Stack].
 
 -compile({inline,yeccpars2_24_/1}).
 -file("grm.yrl", 38).
 yeccpars2_24_(__Stack0) ->
- [__3,__2,__1 | __Stack] = __Stack0,
+ [___3,___2,___1 | __Stack] = __Stack0,
  [begin
-   ff ( __1 ) ++ ff ( __2 ) ++ ff ( __3 )
+                            ff(___1)++ff(___2)++ff(___3)
   end | __Stack].
 
 -compile({inline,yeccpars2_25_/1}).
 -file("grm.yrl", 19).
 yeccpars2_25_(__Stack0) ->
- [__8,__7,__6,__5,__4,__3,__2,__1 | __Stack] = __Stack0,
+ [___8,___7,___6,___5,___4,___3,___2,___1 | __Stack] = __Stack0,
  [begin
-   { connect_remote , ff ( __3 ) ,
-    ff ( __5 ) ++ "@" ++ __7 }
+                          {connect_remote, ff(___3),
+                                           ff(___5)++"@"++___7}
   end | __Stack].
 
 -compile({inline,yeccpars2_31_/1}).
 -file("grm.yrl", 34).
 yeccpars2_31_(__Stack0) ->
- [__7,__6,__5,__4,__3,__2,__1 | __Stack] = __Stack0,
+ [___7,___6,___5,___4,___3,___2,___1 | __Stack] = __Stack0,
  [begin
-   __1 ++ "." ++ __3 ++ "." ++ __5 ++ "." ++ __7
+                                              ___1++"."++___3++"."++___5++"."++___7
   end | __Stack].
 
 
