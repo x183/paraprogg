@@ -1,5 +1,6 @@
 -module(client).
 -export([handle/2, initial_state/3]).
+-import(genserver,[start/3,request/2,request/3]).
 
 % This record defines the structure of the state of a client.
 % Add whatever other fields you need.
@@ -28,23 +29,25 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
 
 % Join channel
 handle(St, {join, Channel}) ->
-    St#client_st.server ! {join, Channel, self(), St#client_st.nick},
+    genserver:request(St#client_st.server, {join, Channel, self(), St#client_st.nick}),
+    %St#client_st.server ! {join, Channel, self(), St#client_st.nick},
     {reply, ok, St};
     %{reply, {error, not_implemented, "join not implemented"}, St} ;
 
 % Leave channel
 handle(St, {leave, Channel}) ->
-    % {reply, ok, St} ;
-    St#client_st.server ! {leave, Channel, St#client_st.nick},
-    {reply, ok, St};
+    Reply = genserver:request(St#client_st.server, {leave, Channel, St#client_st.nick}),
+    %case 
+    {reply, ok, St} ;
+    %St#client_st.server ! {leave, Channel, St#client_st.nick},
+    %{reply, ok, St};
 
     %{reply, {error, not_implemented, "leave not implemented"}, St} ;
 
 % Sending message (from GUI, to channel)
 handle(St, {message_send, Channel, Msg}) ->
-    St#client_st.server ! {message_send, Channel, St#client_st.gui, St#client_st.nick, Msg},
+    genserver:request(St#client_st.server, {message_send, Channel, St#client_st.nick, Msg}),
     {reply, ok, St} ;
-    %{reply, {error, not_implemented, "message sending not implemented"}, St} ;
 
 % This case is only relevant for the distinction assignment!
 % Change nick (no check, local only)
