@@ -1,8 +1,13 @@
 -module(server).
--export([start/1,stop/1]).
--import(genserver,[start/3,request/2,request/3]).
--import(channel,[channel/1]).
+-export([start/1, stop/1]).
+-import(genserver, [start/3, request/2, request/3]).
 
+-record(server_st, {
+    nicks
+    }).
+initial_state(Nicks) ->
+    #server_st{
+        nicks=Nicks}.
 % Start a new server process with the given name
 % Do not change the signature of this function.
 start(ServerAtom) ->
@@ -10,47 +15,68 @@ start(ServerAtom) ->
     % - Spawn a new process which waits for a message, handles it, then loops infinitely
     % - Register this process to ServerAtom
     % - Return the process ID
-    Pid = genserver:start(ServerAtom,[],fun handleMsg/1),
-    Pid.
+    initial_state([]),
+    genserver:start(ServerAtom, [], fun handle/2).
 
-    
-handleMsg(Channels) ->
-    receive 
-        {join, Channel, From, Nick} -> 
-            case lists:member(Channel,Channels) of
-                false -> 
-                    genserver:start(Channel, [], fun channel:channel/1),
-                    register(Nick, From),
-                    genserver:request(Channel, {join, Nick}),
-                    genserver:request(self(), {reply, [Channel|Channels]});
-                true -> 
-                    genserver:request(Channel, {join, Nick}),
-                    genserver:request(self(), {reply, [Channels]})
-            end;
-            %handleMsg([{Channel, Nick} | ChannelNameList]);
-            
-        {leave, Channel, Nick} -> 
-            % handleMsg( [X || X <- ChannelNameList, X  =/={Channel,Nick}]);
-            case lists:member(Channel, Channels) of
-                true -> 
-                    genserver:request(Channel,{leave, Nick}),
-                    genserver:request(self(), {reply, [Channels]});
-                false -> ok
-            end;
+% Our Server server loop function
+handle(State, {join, Channel, From, Nick}) ->
+    case lists:member(Nick, State#server_st.nicks) of 
+    false -> #server_st{nicks = [Nick | nicks]},
+    case lists:member(Channel, State) of
+        true ->
+            Result = genserver:request(list_to_atom(Channel), {join, From}),
+            {reply, Result, State};
+        false ->
+            genserver:start(list_to_atom(Channel), [From], fun channel/2),
+            {reply, ok, [Channel | State]}
+    end;
+handle(State, stop_channels) ->
+    lists:foreach(fun(Channel) -> genserver:stop(list_to_atom(Channel)) end, State),
+    {reply, ok, State};
 
-        % Something in here is wacky, but I don't know what
-        {message_send, Channel, Nick, Msg} -> 
-            case lists:member(Channel, Channels) of
-                true -> 
-                    genserver:request(Channel, {message_send, Nick, Msg}),
-                    genserver:request(self(), {reply, [Channels]}); 
-                false -> ok     
-            end;          
-        stop -> 
-            Channels
+hande(State, {new_nick, NewNick, Nick}) -> 
+    case lists:member(NewNick, State#server_st.nicks) of
+        true -> {reply, nick_taken, State};
+        false -> lists:delete(Nick , State#server_st.nicks),
+            #server_st{nicks = [NewNick| nicks]},
+            {reply, ok, State}
+        end.
+
+
+
+% Our channel server loop function
+channel(State, {join, From}) ->
+    case lists:member(From, State) of
+        true ->
+            {reply, user_already_joined, State};
+        false ->
+            {reply, ok, [From | State]}
+    end;
+channel(State, {leave, From}) ->
+    case lists:member(From, State) of
+        true ->
+            NewState = lists:delete(From, State),
+            {reply, ok, NewState};
+        false ->
+            {reply, user_not_joined, State}
+    end;
+channel(State, {message_send, Channel, Nick, Msg, From}) ->
+    case lists:member(From, State) of
+        true ->
+            spawn( fun() ->
+            lists:foreach(
+                fun(User) ->
+                    if
+                        User == From -> skip;
+                        true -> genserver:request(User, {message_receive, Channel, Nick, Msg})
+                    end
+                end,
+                State) 
+            end),
+            {reply, ok, State};
+        false ->
+            {reply, user_not_joined, State}
     end.
-
-
 % Channels ska fortsätta även om servern krashar, kan vara värt att skapa dem separat
 % Skicka meddelanden till client, vilken i sin tur skickar vidare till TUI (terminal, yay! 😀)
 % Använd genserver istället för att skicka messages
@@ -62,10 +88,9 @@ stop(ServerAtom) ->
     % Stop all connected channels,
     % Stop server,
     % return ok.
-    Channels = genserver:request(ServerAtom,{stop}),
-    lists:foreach(fun(Channel) -> genserver:stop(Channel) end, Channels),
+    genserver:request(ServerAtom, stop_channels),
     genserver:stop(ServerAtom),
     ok.
 
-    %genserver:stop(ServerAtom),
+%genserver:stop(ServerAtom),
     %ok.

@@ -29,31 +29,48 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
 
 % Join channel
 handle(St, {join, Channel}) ->
-    genserver:request(St#client_st.server, {join, Channel, self(), St#client_st.nick}),
+    case catch genserver:request(St#client_st.server, {join, Channel,self(), St#client_st.nick}) of 
+        ok -> 
+            {reply, ok, St};
+        user_already_joined ->
+            {reply,{error, user_already_joined, "You have already joined this channel"},St};
+        _ ->
+            {reply, {error, server_not_reached, "Server not reached"}, St}
+    end;
     %St#client_st.server ! {join, Channel, self(), St#client_st.nick},
-    {reply, ok, St};
     %{reply, {error, not_implemented, "join not implemented"}, St} ;
 
 % Leave channel
 handle(St, {leave, Channel}) ->
-    Reply = genserver:request(St#client_st.server, {leave, Channel, St#client_st.nick}),
-    %case 
-    {reply, ok, St} ;
-    %St#client_st.server ! {leave, Channel, St#client_st.nick},
-    %{reply, ok, St};
-
-    %{reply, {error, not_implemented, "leave not implemented"}, St} ;
+    case catch genserver:request(list_to_atom(Channel), {leave, self()}) of 
+        ok -> 
+            {reply, ok, St};
+        user_not_joined -> 
+            {reply, {error, user_not_joined, "You have not joined this channel"}, St};
+        _ ->
+            {reply, {error, server_not_reached, "Server not reached"}, St}
+    end;
 
 % Sending message (from GUI, to channel)
 handle(St, {message_send, Channel, Msg}) ->
-    genserver:request(St#client_st.server, {message_send, Channel, St#client_st.nick, Msg}),
-    {reply, ok, St} ;
-
+    case catch genserver:request(list_to_atom(Channel), {message_send, Channel, St#client_st.nick, Msg, self()}) of
+        ok ->
+            {reply, ok, St} ;
+        user_not_joined ->
+            {reply,{error, user_not_joined, "You haven't joined that channel yet"},St};
+        _ ->
+            {reply, {error, server_not_reached, "Server not reached"}, St}
+    end;
 % This case is only relevant for the distinction assignment!
 % Change nick (no check, local only)
 handle(St, {nick, NewNick}) ->
-    {reply, ok, St#client_st{nick = NewNick}} ;
-
+    case catch genserver:request(St#client_st.server,{new_nick,NewNick,St#client_st.nick}) of
+        ok ->
+            {reply, ok, St#client_st{nick = NewNick}} ;
+        nick_taken ->
+            {reply,{error,nick_taken,"That nick is already in use"},St};
+        _ -> {reply, {error, server_not_reached, "Server not reached"}, St}
+    end;
 % ---------------------------------------------------------------------------
 % The cases below do not need to be changed...
 % But you should understand how they work!
