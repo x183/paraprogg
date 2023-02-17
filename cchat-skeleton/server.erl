@@ -4,10 +4,11 @@
 
 -record(server_st, {
     nicks
-    }).
+}).
 initial_state(Nicks) ->
     #server_st{
-        nicks=Nicks}.
+        nicks = Nicks
+    }.
 % Start a new server process with the given name
 % Do not change the signature of this function.
 start(ServerAtom) ->
@@ -16,33 +17,36 @@ start(ServerAtom) ->
     % - Register this process to ServerAtom
     % - Return the process ID
     initial_state([]),
-    genserver:start(ServerAtom, {[],[]}, fun handle/2).
+    genserver:start(ServerAtom, {[], []}, fun handle/2).
 
 % Our Server server loop function
-handle({ChannelState,NickState}, {join, Channel, From, Nick}) ->
-    case lists:member(Nick, NickState) of
-    false ->
-    case lists:member(Channel, ChannelState) of
-        true ->
-            Result = genserver:request(list_to_atom(Channel), {join, From}),
-            {reply, Result, {ChannelState,[Nick | NickState]}};
+handle({ChannelState, NickState}, {join, Channel, From, Nick}) ->
+    case lists:member(Nick, [N || {N, F} <- NickState, F =/= From]) of
         false ->
-            genserver:start(list_to_atom(Channel), [From], fun channel/2),
-            {reply, ok, {[Channel | ChannelState],[Nick | NickState]}}
-    end
+            NewNickState = [{Nick, From} | [{N, F} || {N, F} <- NickState, From =/= F]],
+            case lists:member(Channel, ChannelState) of
+                true ->
+                    Result = genserver:request(list_to_atom(Channel), {join, From}),
+                    {reply, Result, {ChannelState, NewNickState}};
+                false ->
+                    genserver:start(list_to_atom(Channel), [From], fun channel/2),
+                    {reply, ok, {[Channel | ChannelState], NewNickState}}
+            end
     end;
-handle({ChannelState,NickState}, stop_channels) ->
+handle({ChannelState, NickState}, stop_channels) ->
     lists:foreach(fun(Channel) -> genserver:stop(list_to_atom(Channel)) end, ChannelState),
-    {reply, ok, {[],NickState}};
-
-handle({ChannelState,NickState}, {new_nick, NewNick, Nick}) ->
-    case lists:member(NewNick, NickState) of
-        true -> {reply, nick_taken, {ChannelState,NickState}};
-        false -> lists:delete(Nick , NickState),
-            {reply, ok, {ChannelState,[NickState|NickState]}}
-        end.
-
-
+    {reply, ok, {[], NickState}};
+handle({ChannelState, NickState}, {new_nick, NewNick, Nick}) ->
+    case lists:member(NewNick, [N || {N, _} <- NickState]) of
+        true ->
+            {reply, nick_taken, {ChannelState, NickState}};
+        false ->
+            {reply, ok,
+                {ChannelState, [
+                    [{NewNick, F} || {N, F} <- NickState, N == Nick]
+                    | [{N, F} || {N, F} <- NickState, N =/= Nick]
+                ]}}
+    end.
 
 % Our channel server loop function
 channel(State, {join, From}) ->
@@ -63,15 +67,16 @@ channel(State, {leave, From}) ->
 channel(State, {message_send, Channel, Nick, Msg, From}) ->
     case lists:member(From, State) of
         true ->
-            spawn( fun() ->
-            lists:foreach(
-                fun(User) ->
-                    if
-                        User == From -> skip;
-                        true -> genserver:request(User, {message_receive, Channel, Nick, Msg})
-                    end
-                end,
-                State)
+            spawn(fun() ->
+                lists:foreach(
+                    fun(User) ->
+                        if
+                            User == From -> skip;
+                            true -> genserver:request(User, {message_receive, Channel, Nick, Msg})
+                        end
+                    end,
+                    State
+                )
             end),
             {reply, ok, State};
         false ->
