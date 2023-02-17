@@ -16,30 +16,30 @@ start(ServerAtom) ->
     % - Register this process to ServerAtom
     % - Return the process ID
     initial_state([]),
-    genserver:start(ServerAtom, [], fun handle/2).
+    genserver:start(ServerAtom, {[],[]}, fun handle/2).
 
 % Our Server server loop function
-handle(State, {join, Channel, From, Nick}) ->
-    case lists:member(Nick, State#server_st.nicks) of 
-    false -> #server_st{nicks = [Nick | nicks]},
-    case lists:member(Channel, State) of
+handle({ChannelState,NickState}, {join, Channel, From, Nick}) ->
+    case lists:member(Nick, NickState) of
+    false ->
+    case lists:member(Channel, ChannelState) of
         true ->
             Result = genserver:request(list_to_atom(Channel), {join, From}),
-            {reply, Result, State};
+            {reply, Result, {ChannelState,[Nick | NickState]}};
         false ->
             genserver:start(list_to_atom(Channel), [From], fun channel/2),
-            {reply, ok, [Channel | State]}
+            {reply, ok, {[Channel | ChannelState],[Nick | NickState]}}
+    end
     end;
-handle(State, stop_channels) ->
-    lists:foreach(fun(Channel) -> genserver:stop(list_to_atom(Channel)) end, State),
-    {reply, ok, State};
+handle({ChannelState,NickState}, stop_channels) ->
+    lists:foreach(fun(Channel) -> genserver:stop(list_to_atom(Channel)) end, ChannelState),
+    {reply, ok, {[],NickState}};
 
-hande(State, {new_nick, NewNick, Nick}) -> 
-    case lists:member(NewNick, State#server_st.nicks) of
-        true -> {reply, nick_taken, State};
-        false -> lists:delete(Nick , State#server_st.nicks),
-            #server_st{nicks = [NewNick| nicks]},
-            {reply, ok, State}
+handle({ChannelState,NickState}, {new_nick, NewNick, Nick}) ->
+    case lists:member(NewNick, NickState) of
+        true -> {reply, nick_taken, {ChannelState,NickState}};
+        false -> lists:delete(Nick , NickState),
+            {reply, ok, {ChannelState,[NickState|NickState]}}
         end.
 
 
@@ -71,7 +71,7 @@ channel(State, {message_send, Channel, Nick, Msg, From}) ->
                         true -> genserver:request(User, {message_receive, Channel, Nick, Msg})
                     end
                 end,
-                State) 
+                State)
             end),
             {reply, ok, State};
         false ->
