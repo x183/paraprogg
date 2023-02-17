@@ -13,13 +13,14 @@ start(ServerAtom) ->
 
 % Tries to add a user to a specific channel
 handle({ChannelState, NickState}, {join, Channel, From, Nick}) ->
-    % Checks
+    % Checks if user is part of our nicklist, if they aren't, add them
     case lists:member(Nick, [N || {N, F} <- NickState, F =/= From]) of
         false ->
             NewNickState = [{Nick, From} | NickState];
         true ->
             NewNickState = NickState
     end,
+    % Checks if the channel user is trying to access is active, if it is; tries to let the user join; else, start it
     case lists:member(Channel, ChannelState) of
         true ->
             Result = genserver:request(list_to_atom(Channel), {join, From}),
@@ -48,25 +49,33 @@ handle({ChannelState, NickState}, {new_nick, NewNick, Nick}) ->
                 ]}}
     end.
 
-% Our channel server loop function
+% Tries to let a user join the channel
 channel(State, {join, From}) ->
+    % Checks if the user have already joined the channel
     case lists:member(From, State) of
         true ->
             {reply, user_already_joined, State};
         false ->
             {reply, ok, [From | State]}
     end;
+% Tries to ake the user leave our channel!
 channel(State, {leave, From}) ->
+    % Checks if the user is a current member of the channel
     case lists:member(From, State) of
         true ->
+            % If the user is a channel member, remove them
             NewState = lists:delete(From, State),
             {reply, ok, NewState};
         false ->
             {reply, user_not_joined, State}
     end;
+
+% Sends a message to all users in the channel except the one who sent it
 channel(State, {message_send, Channel, Nick, Msg, From}) ->
+    % Check if the sending user is a channel member
     case lists:member(From, State) of
         true ->
+            % Spawns a process which sends a message to all users
             spawn(fun() ->
                 lists:foreach(
                     fun(User) ->
@@ -82,10 +91,6 @@ channel(State, {message_send, Channel, Nick, Msg, From}) ->
         false ->
             {reply, user_not_joined, State}
     end.
-% Channels ska fortsätta även om servern krashar, kan vara värt att skapa dem separat
-% Skicka meddelanden till client, vilken i sin tur skickar vidare till TUI (terminal, yay! 😀)
-% Använd genserver istället för att skicka messages
-% Kolla på testerna, de är specifika
 
 % Stop the server process registered to the given name,
 % together with any other associated processes
