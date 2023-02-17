@@ -2,13 +2,6 @@
 -export([start/1, stop/1]).
 -import(genserver, [start/3, request/2, request/3]).
 
--record(server_st, {
-    nicks
-}).
-initial_state(Nicks) ->
-    #server_st{
-        nicks = Nicks
-    }.
 % Start a new server process with the given name
 % Do not change the signature of this function.
 start(ServerAtom) ->
@@ -16,31 +9,38 @@ start(ServerAtom) ->
     % - Spawn a new process which waits for a message, handles it, then loops infinitely
     % - Register this process to ServerAtom
     % - Return the process ID
-    initial_state([]),
     genserver:start(ServerAtom, {[], []}, fun handle/2).
 
-% Our Server server loop function
+% Tries to add a user to a specific channel
 handle({ChannelState, NickState}, {join, Channel, From, Nick}) ->
+    % Checks
     case lists:member(Nick, [N || {N, F} <- NickState, F =/= From]) of
         false ->
-            NewNickState = [{Nick, From} | [{N, F} || {N, F} <- NickState, From =/= F]],
-            case lists:member(Channel, ChannelState) of
-                true ->
-                    Result = genserver:request(list_to_atom(Channel), {join, From}),
-                    {reply, Result, {ChannelState, NewNickState}};
-                false ->
-                    genserver:start(list_to_atom(Channel), [From], fun channel/2),
-                    {reply, ok, {[Channel | ChannelState], NewNickState}}
-            end
+            NewNickState = [{Nick, From} | NickState];
+        true ->
+            NewNickState = NickState
+    end,
+    case lists:member(Channel, ChannelState) of
+        true ->
+            Result = genserver:request(list_to_atom(Channel), {join, From}),
+            {reply, Result, {ChannelState, NewNickState}};
+        false ->
+            genserver:start(list_to_atom(Channel), [From], fun channel/2),
+            {reply, ok, {[Channel | ChannelState], NewNickState}}
     end;
+% Stops all channels connected to this server
 handle({ChannelState, NickState}, stop_channels) ->
     lists:foreach(fun(Channel) -> genserver:stop(list_to_atom(Channel)) end, ChannelState),
     {reply, ok, {[], NickState}};
+% Checks if a user can change its nick
 handle({ChannelState, NickState}, {new_nick, NewNick, Nick}) ->
+    % Compares The users new nick to all other nicks
     case lists:member(NewNick, [N || {N, _} <- NickState]) of
         true ->
+            % If the nick is already used by somebody, hinder the change
             {reply, nick_taken, {ChannelState, NickState}};
         false ->
+            % If the nick is unused, change the nick of the user
             {reply, ok,
                 {ChannelState, [
                     [{NewNick, F} || {N, F} <- NickState, N == Nick]
