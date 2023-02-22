@@ -99,9 +99,6 @@ public class ForkJoinSolver
 
             if (maze.hasGoal(current)) {
                 die[0] = true;
-                for (ForkJoinSolver fs : solver) {
-                    fs.join();
-                }
                 maze.move(player, current);
                 return pathFromTo(ogStart, current);
             }
@@ -124,8 +121,15 @@ public class ForkJoinSolver
             }
 
         }
+        List<Integer> toReturn = null;
+        for (ForkJoinSolver fs : solver) {
+            List<Integer> result = fs.join();
+            if (result != null) {
+                toReturn = result;
+            }
+        }
         System.out.println("reached end");
         maze.move(player, ogStart);
-        return null;
+        return toReturn;
     }
 }
