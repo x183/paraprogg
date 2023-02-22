@@ -5,9 +5,13 @@ import amazed.maze.Maze;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
-import java.util.HashMap;
-import java.util.Set;
+import java.util.Stack;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinTask;
+import java.util.concurrent.RecursiveAction;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * <code>ForkJoinSolver</code> implements a solver for
@@ -27,11 +31,19 @@ public class ForkJoinSolver
      * @param maze the maze to be searched
      */
     boolean[] die;
+    List<ForkJoinTask<List<Integer>>> childThreads;
+    ForkJoinPool pool;
     int ogStart;
+    private boolean timeToDie;
+
+    protected ConcurrentSkipListSet<Integer> visited;
+    protected ConcurrentMap<Integer, Integer> predecessor;
 
     public ForkJoinSolver(Maze maze) {
         super(maze);
+        timeToDie=false;
     }
+
 
     /**
      * Creates a solver that searches in <code>maze</code> from the
@@ -49,8 +61,24 @@ public class ForkJoinSolver
         this.forkAfter = forkAfter;
         die = new boolean[] { false };
         ogStart = start;
+        timeToDie=false;
     }
 
+    public ForkJoinSolver(Maze maze, int forkAfter, int start, ConcurrentSkipListSet visited, ConcurrentMap predecessor, boolean[] die, int startStart){
+        this(maze);
+        this.start = start;
+        this.visited = visited;
+        this.predecessor = predecessor;
+        this.die = die;
+        this.ogStart = startStart;
+}
+    
+    @Override
+    protected void initStructures(){
+        visited = new ConcurrentSkipListSet<>();
+        predecessor = new ConcurrentHashMap<>();
+        frontier = new Stack<>();
+    }
     /**
      * Searches for and returns the path, as a list of node
      * identifiers, that goes from the start node to a goal node in
@@ -62,44 +90,44 @@ public class ForkJoinSolver
      *         goal node in the maze; <code>null</code> if such a path cannot
      *         be found.
      */
-    public List<Integer> beginCompute(int start, Set visited, Map predecessor, boolean[] die, int startStart) {
-        this.start = start;
-        this.visited = visited;
-        this.predecessor = predecessor;
-        this.die = die;
-        this.ogStart = startStart;
-        return compute();
+    public void canKillChildren(){
+        timeToDie=true;
+        System.out.println("TIME TO DIE!");
     }
 
     @Override
     public List<Integer> compute() {
-        return parallelSearch();
+        List<Integer> returnValue = parallelSearch();
+        System.out.println(returnValue != null ? returnValue.toString() : "NULL?!?!?");
+        if(start != ogStart) while(!timeToDie) {}
+        System.out.println("death solver = " + childThreads.size());
+        List<Integer> childValues = killChildThread(childThreads);
+        returnValue = (childValues != null) ? childValues : returnValue;
+        return returnValue;
     }
 
     private List<Integer> parallelSearch() {
-        List<ForkJoinSolver> solver = new ArrayList<>();
+        //pool = new ForkJoinPool();
+
+        childThreads = new ArrayList<>();
         frontier.push(start);
         int player = maze.newPlayer(start);
         int numberOfSteps = 0;
         while (!frontier.empty()) {
+            
             if (die[0]) {
-                List<Integer> toReturn = null;
-                for (ForkJoinSolver fs : solver) {
-                    List<Integer> result = fs.join();
-                    if (result != null) {
-                        toReturn = result;
-                    }
-                }
-                System.out.println("killed some threads");
-                maze.move(player, ogStart);
-
-                return toReturn;
+                canKillChildren();
+                return null;
             }
+
             int current = frontier.pop();
+            //System.out.println(current);
+            //System.out.println(maze.neighbors(current).toString());
 
             if (maze.hasGoal(current)) {
                 die[0] = true;
                 maze.move(player, current);
+                System.out.println("Found the goal!");
                 return pathFromTo(ogStart, current);
             }
 
@@ -114,22 +142,54 @@ public class ForkJoinSolver
                 }
             }
 
-            if (forkAfter != 0 && ++numberOfSteps % forkAfter == 0) {
-                solver.add(new ForkJoinSolver(maze, forkAfter));
-                solver.get(solver.size() - 1).fork();
-                solver.get(solver.size() - 1).beginCompute(frontier.pop(), visited, predecessor, die, ogStart);
+            // Issue #1: Det kan vara så att vi måste använda forkpool
+            // Issue #2: Det kan vara så att den sitter och väntar på ett returvärde när man kör beginCompute nedan. och därmed blir det ej parralellt
+            numberOfSteps++;
+            if (forkAfter != 0 && numberOfSteps % forkAfter == 0) {
+                if(frontier.size() > 1){
+                    //System.out.println("created a thread! at: " + (numberOfSteps));
+                    ForkJoinTask task = new ForkJoinSolver(maze, forkAfter, frontier.pop(), visited, predecessor, die, ogStart).fork();
+                    childThreads.add(task);
+                    //childThreads.add(new ForkJoinSolver(maze, forkAfter, frontier.pop(), visited, predecessor, die, ogStart));
+                    //childThreads.get(childThreads.size() - 1).fork();
+                    System.out.println(childThreads.size());
+                }
+                else if (frontier.size() == 1) numberOfSteps--;
             }
 
+
         }
+        maze.move(player, ogStart);
+        return null;
+    }
+
+    private class PSolver extends RecursiveAction{
+        private int start;
+        private ConcurrentSkipListSet visited;
+        private ConcurrentMap predecessor;
+        private boolean[] die;
+        private int startStart;
+
+        @Override
+        public void compute(){
+        }
+    }
+
+    private List<Integer> killChildThread(List<ForkJoinTask<List<Integer>>> threads) {
         List<Integer> toReturn = null;
-        for (ForkJoinSolver fs : solver) {
+        System.out.println("killing smthn");
+        for (ForkJoinTask<List<Integer>> fs : threads) {
+            //fs.canKillChildren();
+            //fs.join();
             List<Integer> result = fs.join();
+            System.out.println(result == null ? "NULL" : "NOT NULL");
             if (result != null) {
                 toReturn = result;
+                System.out.println("found a goal");
             }
         }
-        System.out.println("reached end");
-        maze.move(player, ogStart);
         return toReturn;
-    }
+    }   
+
+
 }
