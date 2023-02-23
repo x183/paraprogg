@@ -43,7 +43,9 @@ public class ForkJoinSolver
     private boolean timeToDie;
     private static AtomicBoolean goalisFound = new AtomicBoolean();
     protected ConcurrentSkipListSet<Integer> visited;
-    protected AtomicReference returnPath = new AtomicReference<>();
+    protected AtomicReference<List<Integer>> returnPath = new AtomicReference<>();
+
+    private List<Integer> path = new ArrayList<>();
 
 
     public ForkJoinSolver(Maze maze) {
@@ -83,13 +85,13 @@ public class ForkJoinSolver
      * }
      */
 
-    public ForkJoinSolver(Maze maze, int forkAfter, int start, ConcurrentSkipListSet visited, AtomicReference returnPath, AtomicBoolean goalisFound) {
+    public ForkJoinSolver(Maze maze, int forkAfter, int start, ConcurrentSkipListSet visited, AtomicBoolean goalisFound, List<Integer> path) {
         this(maze);
         this.start = start;
         this.forkAfter = forkAfter;
         this.visited = visited;
-        this.returnPath = returnPath;
         this.goalisFound = goalisFound;
+        this.path = path;
     }
 
     @Override
@@ -138,42 +140,47 @@ public class ForkJoinSolver
         int player = maze.newPlayer(start);
         int numberOfSteps = 0;
 
+        int last = 0;
+        List<Integer> tpath = new ArrayList<>();
         while (!frontier.empty() && !goalisFound.get()) {
-            numberOfSteps++;
-
             int current = frontier.pop();
+            /*if (frontier.size() == 0){
+                tpath.clear();
+                path.add(current);
+            }
+            else tpath.add(current);*/
+            path.add(current);
 
+            System.out.println("path: " + path.toString() + "\ntPath: " + tpath.toString());
             if (visited.add(current)) {
                 maze.move(player, current);
 
             if (maze.hasGoal(current)) {
                 goalisFound.set(true);
+                path.addAll(tpath);
                 System.out.println("Found the goal!");
-                // killChildThread(children);
-                // Thread.sleep(1000); // plz no =(
-                //returnPath.set(pathFromTo(maze.start(), current));
-                //return pathFromTo(maze.start(), current);
-                return pathFromTo(maze.start(), current);
+                return path;
             }
-            // visited.add(current);
             int i = 0;
                 for (int nb : maze.neighbors(current)) {
                     if (!visited.contains(nb)) {
-                        predecessor.put(nb, current);
+                        //predecessor.put(nb, current);
 
-                        if (i == 0 /* || numberOfSteps < forkAfter */) {
+                        if (i == 0  || numberOfSteps < forkAfter ) {
                             frontier.push(nb);
                         }
 
                         else {
-                            ForkJoinSolver child = new ForkJoinSolver(maze, forkAfter, nb, visited, returnPath, goalisFound);
+                            numberOfSteps = 0;
+                            ForkJoinSolver child = new ForkJoinSolver(maze, forkAfter, nb, visited, goalisFound, new ArrayList<Integer>(path));
                             children.add(child);
                             child.fork();
                         }
                         i++;
                     }
                 }
-
+                numberOfSteps++;
+                //last = current;
             }
 
             // Issue #1: Det kan vara sa att vi maste anvanda forkpool
@@ -205,18 +212,21 @@ public class ForkJoinSolver
              */
 
         }
-        maze.move(player, ogStart);
-        return killChildThread(); // Men liskom detta borde ju lösa det och fånga upp allt Det är inte detdär att
+        //maze.move(player, ogStart);
+        //for (ForkJoinSolver child: children) {
+        //    child.join();
+        //}
+        return killChildren();    // returnPath.get();//killChildThread(); // Men liskom detta borde ju lösa det och fånga upp allt Det är inte detdär att
                                   // vi inte hinner fånga? eller var det en myt? ugh, right
                                   // Jag tänkte ta lunch nu, men ska vi sitta under mötet ikväll?
     }
 
-    private List<Integer> killChildThread() {
+    private List<Integer> killChildren() {
 
         for (ForkJoinSolver child : children) {
             List<Integer> result = child.join();
             if (result != null) {
-                break;
+                return result;
             }
         }
         return null;
