@@ -14,6 +14,9 @@ import java.util.concurrent.RecursiveAction;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+
+
 
 /**
  * <code>ForkJoinSolver</code> implements a solver for
@@ -40,6 +43,7 @@ public class ForkJoinSolver
     private boolean timeToDie;
     private static AtomicBoolean goalisFound = new AtomicBoolean();
     protected ConcurrentSkipListSet<Integer> visited;
+    protected AtomicReference returnPath = new AtomicReference<>();
 
 
     public ForkJoinSolver(Maze maze) {
@@ -79,11 +83,13 @@ public class ForkJoinSolver
      * }
      */
 
-    public ForkJoinSolver(Maze maze, int forkAfter, int start, ConcurrentSkipListSet visited) {
+    public ForkJoinSolver(Maze maze, int forkAfter, int start, ConcurrentSkipListSet visited, AtomicReference returnPath, AtomicBoolean goalisFound) {
         this(maze);
         this.start = start;
         this.forkAfter = forkAfter;
         this.visited = visited;
+        this.returnPath = returnPath;
+        this.goalisFound = goalisFound;
     }
 
     @Override
@@ -145,6 +151,8 @@ public class ForkJoinSolver
                 System.out.println("Found the goal!");
                 // killChildThread(children);
                 // Thread.sleep(1000); // plz no =(
+                //returnPath.set(pathFromTo(maze.start(), current));
+                //return pathFromTo(maze.start(), current);
                 return pathFromTo(maze.start(), current);
             }
             // visited.add(current);
@@ -158,7 +166,7 @@ public class ForkJoinSolver
                         }
 
                         else {
-                            ForkJoinSolver child = new ForkJoinSolver(maze, forkAfter, nb, visited);
+                            ForkJoinSolver child = new ForkJoinSolver(maze, forkAfter, nb, visited, returnPath, goalisFound);
                             children.add(child);
                             child.fork();
                         }
@@ -208,7 +216,7 @@ public class ForkJoinSolver
         for (ForkJoinSolver child : children) {
             List<Integer> result = child.join();
             if (result != null) {
-                return result;
+                break;
             }
         }
         return null;
