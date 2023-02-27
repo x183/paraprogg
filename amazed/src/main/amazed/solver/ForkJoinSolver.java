@@ -72,18 +72,6 @@ public class ForkJoinSolver
         goalisFound = new AtomicBoolean(false);
     }
 
-    /*
-     * public ForkJoinSolver(Maze maze, int forkAfter, int start,
-     * ConcurrentSkipListSet visited, HashMap predecessor,
-     * boolean[] die, int startStart) {
-     * this(maze);
-     * this.start = start;
-     * this.visited = visited;
-     * this.predecessor = predecessor;
-     * this.die = die;
-     * this.ogStart = startStart;
-     * }
-     */
 
     public ForkJoinSolver(Maze maze, int forkAfter, int start, ConcurrentSkipListSet visited, AtomicBoolean goalisFound, List<Integer> path) {
         this(maze);
@@ -120,16 +108,7 @@ public class ForkJoinSolver
     @Override
     public List<Integer> compute() {
         return parallelSearch();
-        /*
-         * List<Integer> returnValue = parallelSearch();
-         * System.out.println(returnValue != null ? returnValue.toString() :
-         * "NULL?!?!?");
-         * if(start != ogStart) while(!timeToDie) {}
-         * System.out.println("death solver = " + childThreads.size());
-         * List<Integer> childValues = killChildThread(childThreads);
-         * returnValue = (childValues != null) ? childValues : returnValue;
-         * return returnValue;
-         */
+
     }
 
     private List<Integer> parallelSearch() {
@@ -166,7 +145,7 @@ public class ForkJoinSolver
                     if (!visited.contains(nb)) {
                         //predecessor.put(nb, current);
 
-                        if (i == 0  || numberOfSteps < forkAfter ) {
+                        if (i == 0 || numberOfSteps < 2) {
                             frontier.push(nb);
                         }
 
@@ -180,45 +159,12 @@ public class ForkJoinSolver
                     }
                 }
                 numberOfSteps++;
-                //last = current;
             }
 
-            // Issue #1: Det kan vara sa att vi maste anvanda forkpool
-            // Issue #2: Det kan vara sa att den sitter och vantar pa ett returvarde nar man
-            // kor beginCompute nedan. och darmed blir det ej parralell
 
-            // jag hittad ett problem. nej det var att det fanns en kallelse paa die[0] kvar
-            // i koden
-            // Nu skickas inte resultatet tillbaks, men det krashar inte
-            // testa kor igen
-            // No worky =(
-            // GO AGAIN
-            // Vad är det du ändrar på? Jag la till ogStart igen, den hade vi slarvat bort.
-            // sedan renskrev jag killchildren pga tänkte att den kanske var clutterd och
-            // något var knasigt
-            // Ja, problemet verkar ju vara att vi inte tar emot resultatet rätt
-            /*
-             * for (int i = 1; i < frontier.size(); i++) {
-             *
-             * //System.out.println("created a thread! at: " + (numberOfSteps));
-             * ForkJoinTask task = new ForkJoinSolver(maze, forkAfter, frontier.pop(),
-             * visited, predecessor, die, ogStart).fork();
-             * childThreads.add(task);
-             * //childThreads.add(new ForkJoinSolver(maze, forkAfter, frontier.pop(),
-             * visited, predecessor, die, ogStart));
-             * //childThreads.get(childThreads.size() - 1).fork();
-             * System.out.println(childThreads.size());
-             * }
-             */
 
         }
-        //maze.move(player, ogStart);
-        //for (ForkJoinSolver child: children) {
-        //    child.join();
-        //}
-        return killChildren();    // returnPath.get();//killChildThread(); // Men liskom detta borde ju lösa det och fånga upp allt Det är inte detdär att
-                                  // vi inte hinner fånga? eller var det en myt? ugh, right
-                                  // Jag tänkte ta lunch nu, men ska vi sitta under mötet ikväll?
+        return killChildren();
     }
 
     private List<Integer> killChildren() {
@@ -230,21 +176,7 @@ public class ForkJoinSolver
             }
         }
         return null;
-        /*
-         * List<Integer> toReturn = null;
-         * System.out.println("killing smthn");
-         * for (ForkJoinSolver fs : threads) {
-         * //fs.canKillChildren();
-         * //fs.join();
-         * List<Integer> result = fs.join();
-         * System.out.println(result == null ? "NULL" : "NOT NULL");
-         * if (result != null) {
-         * toReturn = result;
-         * System.out.println("found a goal");
-         * }
-         * }
-         * return toReturn;
-         */
+
     }
 
 
