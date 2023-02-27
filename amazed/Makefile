@@ -9,7 +9,7 @@ MAIN_CLASS = amazed.Main
 
 MAZE_SOURCES = MazeFrame.java Board.java Cell.java Player.java Position.java Direction.java Tile.java ImageFactory.java Maze.java Amazed.java
 SOLVER_SOURCES = SequentialSolver.java ForkJoinSolver.java
-MAIN_SOURCES = Main.java 
+MAIN_SOURCES = Main.java
 
 SOURCE_FILES = $(MAZE_SOURCES:%=$(MAZE_SOURCEPATH)/%) \
 					$(SOLVER_SOURCES:%=$(SOLVER_SOURCEPATH)/%) \
@@ -38,5 +38,10 @@ parallel_medium_step3: compile
 parallel_medium_step9: compile
 	$(JAVA) -cp $(MAIN_CP) $(MAIN_CLASS) $(MAPS_DIR)/medium.map parallel-9
 
-.PHONY: compile
+super_speed: compile
+	$(JAVA) -cp $(MAIN_CP) $(MAIN_CLASS) $(MAPS_DIR)/medium.map parallel-3 200
 
+super_speed_invis: compile
+	$(JAVA) -cp $(MAIN_CP) $(MAIN_CLASS) $(MAPS_DIR)/medium.map parallel-3 -1
+
+.PHONY: compile

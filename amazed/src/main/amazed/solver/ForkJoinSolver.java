@@ -4,15 +4,11 @@ import amazed.maze.Maze;
 
 import java.util.List;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.Stack;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
-import java.util.concurrent.RecursiveAction;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -84,7 +80,7 @@ public class ForkJoinSolver
 
     @Override
     protected void initStructures(){
-        visited = new ConcurrentSkipListSet<>();
+        visited = visited != null ? visited : new ConcurrentSkipListSet<>();
         predecessor = new HashMap<>();
         frontier = new Stack<>();
     }
@@ -93,17 +89,13 @@ public class ForkJoinSolver
      * Searches for and returns the path, as a list of node
      * identifiers, that goes from the start node to a goal node in
      * the maze. If such a path cannot be found (because there are no
-     * goals, or all goals are unreacheable), the method returns
+     * goals, or all goals are unreachable), the method returns
      * <code>null</code>.
      *
      * @return the list of node identifiers from the start node to a
      *         goal node in the maze; <code>null</code> if such a path cannot
      *         be found.
      */
-    public void canKillChildren(){
-        timeToDie=true;
-        System.out.println("TIME TO DIE!");
-    }
 
     @Override
     public List<Integer> compute() {
@@ -123,15 +115,9 @@ public class ForkJoinSolver
         List<Integer> tpath = new ArrayList<>();
         while (!frontier.empty() && !goalisFound.get()) {
             int current = frontier.pop();
-            /*if (frontier.size() == 0){
-                tpath.clear();
-                path.add(current);
-            }
-            else tpath.add(current);*/
-            path.add(current);
 
-            System.out.println("path: " + path.toString() + "\ntPath: " + tpath.toString());
-            if (visited.add(current)) {
+            path.add(current);
+            if (visited.add(current) || start == current) {
                 maze.move(player, current);
 
             if (maze.hasGoal(current)) {
@@ -143,18 +129,20 @@ public class ForkJoinSolver
             int i = 0;
                 for (int nb : maze.neighbors(current)) {
                     if (!visited.contains(nb)) {
-                        //predecessor.put(nb, current);
-
-                        if (i == 0 || numberOfSteps < 2) {
+                        if (i == 0) {
                             frontier.push(nb);
                         }
 
                         else {
                             numberOfSteps = 0;
-                            ForkJoinSolver child = new ForkJoinSolver(maze, forkAfter, nb, visited, goalisFound, new ArrayList<Integer>(path));
+
+                            if (visited.add(nb)) {
+                                ForkJoinSolver child = new ForkJoinSolver(maze, forkAfter, nb, visited, goalisFound,
+                                        new ArrayList<Integer>(path));
                             children.add(child);
                             child.fork();
                         }
+                    }
                         i++;
                     }
                 }
